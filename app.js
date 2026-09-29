@@ -19,8 +19,53 @@ function setHero(j){const hero=document.querySelector('#heroBottle'),caption=doc
 const fruitParticles={
   '🥒':['🥒','🥒','🌿'],'🍓':['🍓','🍓','❤️'],'🥕':['🥕','🥕','✨'],'🍉':['🍉','🍉','🌿'],'🫐':['🫐','🫐','💜'],'🥭':['🥭','🥭','✨'],'🍍':['🍍','🍍','🌿'],'🍅':['🍅','🍅','🌿'],'🍑':['🍑','🍑','✨'],'🍋':['🍋','🍋','🍃'],'🥝':['🥝','🥝','🌿']
 };
-function clearParticles(card){card.querySelectorAll('.fall-particle').forEach(p=>p.remove())}
-function burstParticles(card,j){clearParticles(card);const symbols=fruitParticles[j.fruit]||[j.fruit];const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;if(reduced)return;for(let n=0;n<24;n++){const p=document.createElement('span');p.className='fall-particle';p.textContent=symbols[n%symbols.length];const side=n%4;let x,y,dx,dy;if(side===0){x=-2+Math.random()*18;y=8+Math.random()*84;dx=-(70+Math.random()*120);dy=(Math.random()*160-80)}else if(side===1){x=82+Math.random()*20;y=8+Math.random()*84;dx=70+Math.random()*120;dy=(Math.random()*160-80)}else if(side===2){x=8+Math.random()*84;y=-3+Math.random()*18;dx=(Math.random()*160-80);dy=-(70+Math.random()*120)}else{x=8+Math.random()*84;y=82+Math.random()*20;dx=(Math.random()*160-80);dy=70+Math.random()*120}p.style.left=x+'%';p.style.top=y+'%';p.style.setProperty('--dx',dx+'px');p.style.setProperty('--dy',dy+'px');p.style.setProperty('--rot',(Math.random()*720-360)+'deg');p.style.setProperty('--delay',(Math.random()*180)+'ms');p.style.setProperty('--size',(18+Math.random()*13)+'px');card.appendChild(p);setTimeout(()=>p.remove(),1100)}}
+let activeBurst=null;
+function clearParticles(){if(!activeBurst)return;activeBurst.forEach(p=>p.remove());activeBurst=null}
+function burstParticles(card,j){
+  clearParticles();
+  const symbols=fruitParticles[j.fruit]||[j.fruit];
+  const rect=card.getBoundingClientRect();
+  const particles=[];
+  const count=32;
+  for(let n=0;n<count;n++){
+    const p=document.createElement('span');
+    p.className='fall-particle';
+    p.textContent=symbols[n%symbols.length];
+    p.style.position='fixed';
+    p.style.zIndex='99999';
+    p.style.pointerEvents='none';
+    p.style.left='0';
+    p.style.top='0';
+    p.style.fontSize=(20+Math.random()*16)+'px';
+    p.style.lineHeight='1';
+    p.style.willChange='transform,opacity';
+    document.body.appendChild(p);
+    const side=n%4;
+    let sx,sy,dx,dy;
+    if(side===0){sx=rect.left+Math.random()*rect.width*.18;sy=rect.top+Math.random()*rect.height;dx=-(90+Math.random()*190);dy=Math.random()*220-110}
+    else if(side===1){sx=rect.right-Math.random()*rect.width*.18;sy=rect.top+Math.random()*rect.height;dx=90+Math.random()*190;dy=Math.random()*220-110}
+    else if(side===2){sx=rect.left+Math.random()*rect.width;sy=rect.top+Math.random()*rect.height*.18;dx=Math.random()*220-110;dy=-(90+Math.random()*190)}
+    else{sx=rect.left+Math.random()*rect.width;sy=rect.bottom-Math.random()*rect.height*.18;dx=Math.random()*220-110;dy=90+Math.random()*190}
+    particles.push({el:p,sx,sy,dx,dy,rot:Math.random()*720-360,delay:Math.random()*120,start:performance.now()});
+  }
+  activeBurst=particles.map(x=>x.el);
+  const start=performance.now();
+  function frame(now){
+    if(!activeBurst)return;
+    let alive=false;
+    particles.forEach(q=>{
+      const t=Math.max(0,Math.min(1,(now-start-q.delay)/850));
+      if(t<1){
+        alive=true;
+        const ease=1-Math.pow(1-t,3);
+        q.el.style.transform=`translate3d(${q.sx+q.dx*ease}px,${q.sy+q.dy*ease}px,0) rotate(${q.rot*ease}deg) scale(${.7+ease*.45})`;
+        q.el.style.opacity=String(t<.08?t/.08:1-t);
+      }
+    });
+    if(alive)requestAnimationFrame(frame);else clearParticles();
+  }
+  requestAnimationFrame(frame);
+}
 
 function render(filter='all'){const list=juices.filter(j=>filter==='all'||j.cat===filter);grid.innerHTML=list.map(j=>`<article class="juice" role="button" tabindex="0" aria-label="Explore ${esc(j.name)}" data-name="${esc(j.name)}" style="--juice-bg:${j.color};--juice-border:${j.dark};--juice-accent:${j.accent};"><div class="juice-bottle">${bottleSvg(j)}</div><div class="juice-copy"><div class="juice-number">BLEND / ${String(juices.indexOf(j)+1).padStart(2,'0')}</div><h3>${esc(j.name)}</h3><p>${esc(j.desc)}</p><div class="tags">${j.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="benefit">✦ ${esc(j.benefit)}</div><div class="card-buy"><strong>₹${j.price}</strong><button class="add-button" type="button" data-add="${esc(j.name)}">Add to cart <span>+</span></button></div></div></article>`).join('');list.forEach(j=>{const card=grid.querySelector(`[data-name="${CSS.escape(j.name)}"]`);if(!card)return;const explore=()=>{setHero(j);document.querySelector('#top').scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})};card.addEventListener('mouseenter',()=>burstParticles(card,j));card.addEventListener('mouseleave',()=>clearParticles(card));card.addEventListener('click',e=>{if(e.target.closest('.add-button'))return;explore()});card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();explore()}})})}
 render();
